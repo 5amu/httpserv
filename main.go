@@ -9,16 +9,18 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/5amu/hermes"
+
 	"httpserv/certbuild"
 )
 
 var (
-	port  = flag.Int("port", 8443, "Port to open")
+	port  = flag.Int("port", 8999, "Port to open")
+	notls = flag.Bool("notls", false, "Switch TLS off")
 	path  = flag.String("path", "./", "Path to expose")
 	host  = flag.String("host", "127.0.0.1", "Set your IP")
 	usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-
 		flag.PrintDefaults()
 	}
 )
@@ -39,6 +41,9 @@ func SetupCloseHandler(filenames []string) {
 }
 
 func main() {
+	// Define basig logger
+	var h hermes.Hermes
+
 	// Define usage
 	flag.Usage = usage
 
@@ -48,16 +53,21 @@ func main() {
 	// Get base directory
 	fs := http.FileServer(http.Dir(*path))
 
-	cert, err := certbuild.GeneratePair(*host)
-	if err != nil {
-		log.Fatal(err)
+	if *notls {
+		log.Print(h.Yellow(fmt.Sprintf("Starting up the server in http mode on port %d", *port)))
+		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), fs))
+		return
 	}
 
-	log.Printf("Starting up the server in https mode on port %d", *port)
+	cert, err := certbuild.GeneratePair(*host)
+	if err != nil {
+		log.Fatal(h.Red(err.Error()))
+	}
 
 	// Launch handler for interrupt signals
 	SetupCloseHandler([]string{cert.Cert, cert.Key})
 
+	log.Print(h.Green(fmt.Sprintf("Starting up the server in https mode on port %d", *port)))
 	// Launch server in https mode
 	log.Fatal(http.ListenAndServeTLS(fmt.Sprintf(":%d", *port), cert.Cert, cert.Key, fs))
 }
